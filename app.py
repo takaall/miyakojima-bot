@@ -3,6 +3,12 @@ from flask import Flask, request, abort
 from linebot.v3 import (
     WebhookHandler
 )
+# ↓↓↓ここから修正・追加↓↓↓
+from linebot.v3.webhooks import (
+    MessageEvent,           # <<< これを追加！
+    TextMessageContent,     # <<< これを追加！
+    WebhookHandler
+)
 from linebot.v3.messaging import (
     Configuration,
     ApiClient,
@@ -13,6 +19,7 @@ from linebot.v3.messaging import (
 from linebot.v3.exceptions import (
     InvalidSignatureError
 )
+# ↑↑↑ここまで修正・追加↑↑↑
 
 app = Flask(__name__)
 
