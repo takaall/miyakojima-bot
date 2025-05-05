@@ -25,16 +25,17 @@ def chatgpt_response(user_message):
 # LINE Bot 応答関数
 def handle_message(event, line_bot_api):
     user_message = event.message.text
-    reply_text = "ふむふむ（ファクトリ版）。まだ勉強中じゃ。"
 
+    # 特定のキーワードは固定応答、それ以外はChatGPTへ
     if user_message in ["おはよう", "こんにちは", "こんばんは"]:
         reply_text = f"{user_message}、我が主！ ご機嫌麗しゅう。（ファクトリ版）"
     elif user_message == "天気":
         reply_text = "宮古島の天気（ファクトリ版）。鋭意準備中！"
     elif user_message in ["雑学", "豆知識", "面白い話", "なんか話して"]:
         reply_text = "面白い話（ファクトリ版）。仕入れ中！"
-    elif user_message.startswith("チャット") or user_message.startswith("雑談"):
-        reply_text = chatgpt_response(user_message.replace("チャット", "").replace("雑談", "").strip())
+    else:
+        # それ以外のメッセージはChatGPTに送る
+        reply_text = chatgpt_response(user_message)
 
     try:
         line_bot_api.reply_message(
