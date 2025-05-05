@@ -1,13 +1,28 @@
 import os
 from flask import Flask, request, abort
-
-# --- LINE Bot SDK のインポート ---
 from linebot.v3 import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
 from linebot.v3.exceptions import InvalidSignatureError
+import openai
 
-# --- イベント処理関数を定義 ---
+# ChatGPT 応答関数
+def chatgpt_response(user_message):
+    openai.api_key = os.environ.get('OPENAI_API_KEY')
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": user_message}],
+            max_tokens=100,
+            temperature=0.7,
+        )
+        reply_text = response['choices'][0]['message']['content'].strip()
+        return reply_text
+    except Exception as e:
+        print(f"OpenAI API error: {e}")
+        return "ChatGPT連携中にエラーが発生しました。"
+
+# LINE Bot 応答関数
 def handle_message(event, line_bot_api):
     user_message = event.message.text
     reply_text = "ふむふむ（ファクトリ版）。まだ勉強中じゃ。"
@@ -18,6 +33,8 @@ def handle_message(event, line_bot_api):
         reply_text = "宮古島の天気（ファクトリ版）。鋭意準備中！"
     elif user_message in ["雑学", "豆知識", "面白い話", "なんか話して"]:
         reply_text = "面白い話（ファクトリ版）。仕入れ中！"
+    elif user_message.startswith("チャット") or user_message.startswith("雑談"):
+        reply_text = chatgpt_response(user_message.replace("チャット", "").replace("雑談", "").strip())
 
     try:
         line_bot_api.reply_message(
@@ -30,7 +47,7 @@ def handle_message(event, line_bot_api):
     except Exception as e:
         print(f"Reply Error (factory): {e}")
 
-# --- アプリケーションファクトリ関数 ---
+# アプリケーションファクトリ関数
 def create_app():
     app = Flask(__name__)
     app.logger.info("Flask app created inside factory.")
@@ -84,9 +101,9 @@ def create_app():
     app.logger.info("Routes defined inside factory.")
     return app
 
-# --- Vercel 用 ---
+# Vercel 用
 app = create_app()
 
-# --- ローカル実行用 ---
+# ローカル実行用
 if __name__ == '__main__':
     app.run(port=5000)
