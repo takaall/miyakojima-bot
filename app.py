@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Google検索から最新情報を取得する関数
+# Google検索から最新情報を取得する関数（フィルタ強化版）
 def get_google_search_results(query, max_results=3):
     api_key = os.environ.get('GOOGLE_API_KEY')
     cse_id = os.environ.get('CSE_ID')
@@ -20,14 +20,24 @@ def get_google_search_results(query, max_results=3):
         response = requests.get(url)
         data = response.json()
         results = []
-        for item in data.get('items', [])[:max_results]:
-            results.append(f"{item['title']}: {item['link']}")
+
+        for item in data.get('items', []):
+            title = item.get('title', '')
+            snippet = item.get('snippet', '')
+            link = item.get('link', '')
+
+            # タイトルまたはスニペットに「宮古島」が含まれるか確認
+            if '宮古島' in title or '宮古島' in snippet:
+                results.append(f"{title}: {link}")
+                if len(results) >= max_results:
+                    break
+
         return "\n".join(results) if results else "最新情報は見つかりませんでした。"
     except Exception as e:
         print(f"Google API error: {e}")
         return "Google検索中にエラーが発生しました。"
 
-# ChatGPT 応答関数
+# ChatGPT 応答関数（プロンプト修正版）
 def chatgpt_response(user_message):
     api_key = os.environ.get('OPENAI_API_KEY')
     client = OpenAI(api_key=api_key)
@@ -43,9 +53,10 @@ def chatgpt_response(user_message):
 　- アクティビティ（例：シュノーケリング、SUP、ドライブコース）
 　- 天気・混雑・交通情報（例：レンタカー、バス、自転車）
 　- 穴場・季節限定情報（例：ホタル観賞、サガリバナ開花）
-2. 回答は簡潔・親しみやすく、必要なら箇条書き＋絵文字を使う
-3. 対話を柔軟に進め、ユーザーの質問や希望に応じて調整する
-4. 最後に必ず「他にも知りたいことがあれば教えてね！」と伝える
+2. Google検索結果に含まれる情報のみを優先し、自身の知識ベースからの推測で店舗名や場所を生成しない。
+3. 宮古島に関係のない情報は除外する。
+4. 回答は簡潔・親しみやすく、必要なら箇条書き＋絵文字を使う。
+5. 最後に「他にも知りたいことがあれば教えてね！」と伝える。
 
 【最新情報（Google検索結果）】
 以下の情報は直近のネット検索から取得したもので、優先的に提案してください。
@@ -55,11 +66,6 @@ def chatgpt_response(user_message):
 - 難しい敬語や堅苦しい表現
 - 情報の押しつけ（相手が望んでいない提案を続ける）
 - 長文すぎる説明（LINEの特性を意識）
-
-【優先度】
-1. ユーザーの好みを把握
-2. 現地の最新情報を提案
-3. 楽しさ・親しみやすさを演出
 """
 
     try:
