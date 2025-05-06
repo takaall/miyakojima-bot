@@ -5,7 +5,6 @@ from linebot.v3 import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
 from linebot.v3.exceptions import InvalidSignatureError
-import openai
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -15,8 +14,8 @@ load_dotenv()
 def get_google_search_results(query, max_results=3):
     api_key = os.environ.get('GOOGLE_API_KEY')
     cse_id = os.environ.get('CSE_ID')
-    url = f'https://www.googleapis.com/customsearch/v1?q={query}&key={api_key}&cx={cse_id}'
-
+    search_query = f"宮古島 {query}"
+    url = f'https://www.googleapis.com/customsearch/v1?q={search_query}&key={api_key}&cx={cse_id}'
     try:
         response = requests.get(url)
         data = response.json()
@@ -33,7 +32,6 @@ def chatgpt_response(user_message):
     api_key = os.environ.get('OPENAI_API_KEY')
     client = OpenAI(api_key=api_key)
 
-    # Google検索結果を取得してプロンプトに組み込む
     google_info = get_google_search_results(user_message)
     system_prompt = f"""
 あなたは宮古島観光のエキスパートかつ旅行者の友人です。明るく親しみやすく、旅行者が安心して楽しめるようにガイドします。
@@ -51,6 +49,7 @@ def chatgpt_response(user_message):
 5. 最後に必ず「他にも知りたいことがあれば教えてね！」と伝える
 
 【最新情報（Google検索結果）】
+以下の情報は直近のネット検索から取得したもので、優先的に提案してください。
 {google_info}
 
 【NG事項】
@@ -72,7 +71,7 @@ def chatgpt_response(user_message):
                 {"role": "user", "content": user_message}
             ],
             max_tokens=500,
-            temperature=0.7,
+            temperature=0.5,
         )
         reply_text = response.choices[0].message.content.strip()
         return reply_text
@@ -84,7 +83,6 @@ def chatgpt_response(user_message):
 def handle_message(event, line_bot_api):
     user_message = event.message.text
     reply_text = chatgpt_response(user_message)
-
     try:
         line_bot_api.reply_message(
             ReplyMessageRequest(
