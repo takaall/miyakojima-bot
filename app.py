@@ -5,21 +5,24 @@ from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
 from linebot.v3.exceptions import InvalidSignatureError
 import openai
-
+from openai import OpenAI
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # ChatGPT 応答関数
 def chatgpt_response(user_message):
-    openai.api_key = os.environ.get('OPENAI_API_KEY')
+    api_key = os.environ.get('OPENAI_API_KEY')
+    client = OpenAI(api_key=api_key)
+
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": user_message}],
             max_tokens=300,
             temperature=0.7,
         )
-        reply_text = response['choices'][0]['message']['content'].strip()[:1000]
+        reply_text = response.choices[0].message.content.strip()
         return reply_text
     except Exception as e:
         print(f"OpenAI API error: {e}")
@@ -28,6 +31,7 @@ def chatgpt_response(user_message):
 # LINE Bot 応答関数
 def handle_message(event, line_bot_api):
     user_message = event.message.text
+
     if user_message in ["おはよう", "こんにちは", "こんばんは"]:
         reply_text = f"{user_message}、我が主！ ご機嫌麗しゅう。（ファクトリ版）"
     elif user_message == "天気":
@@ -102,7 +106,9 @@ def create_app():
     app.logger.info("Routes defined inside factory.")
     return app
 
+# Vercel 用
 app = create_app()
 
+# ローカル実行用
 if __name__ == '__main__':
     app.run(port=5000)
