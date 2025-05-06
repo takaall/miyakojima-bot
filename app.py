@@ -11,12 +11,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Google検索から最新情報を取得する関数
-def get_google_search_results(query, max_results=3, site_filter=None):
+def get_google_search_results(query, max_results=3):
     api_key = os.environ.get('GOOGLE_API_KEY')
     cse_id = os.environ.get('CSE_ID')
     search_query = f"宮古島 {query}"
-    if site_filter:
-        search_query += f" site:{site_filter}"
     url = f'https://www.googleapis.com/customsearch/v1?q={search_query}&key={api_key}&cx={cse_id}'
     try:
         response = requests.get(url)
@@ -30,27 +28,39 @@ def get_google_search_results(query, max_results=3, site_filter=None):
         return "Google検索中にエラーが発生しました。"
 
 # ChatGPT 応答関数
-def chatgpt_response(user_message, mode="chatgpt"):
+def chatgpt_response(user_message):
     api_key = os.environ.get('OPENAI_API_KEY')
     client = OpenAI(api_key=api_key)
+
     google_info = get_google_search_results(user_message)
-
-    if mode == "direct":  # Google検索結果だけを直接返すモード
-        return f"宮古島の最新情報はこちらです:\n{google_info}"
-
     system_prompt = f"""
-あなたはGoogle検索結果の要約専門家です。
-以下のGoogle検索結果からのみ情報を抜き出し、推測・想像・創作は禁止です。
-検索結果がない場合は「現在の情報は見つかりませんでした」と答えてください。
+あなたは宮古島観光のエキスパートかつ旅行者の友人です。明るく親しみやすく、旅行者が安心して楽しめるようにガイドします。
 
-【Google検索結果】
+【行動指針】
+1. ユーザーの興味・予算・人数・日程・目的をまず質問して聞き出す
+2. 以下のカテゴリから最適な提案をする：
+　- 観光スポット（例：与那覇前浜ビーチ、砂山ビーチ、東平安名崎）
+　- グルメ（例：宮古そば、海鮮、カフェ、夜のバー）
+　- アクティビティ（例：シュノーケリング、SUP、ドライブコース）
+　- 天気・混雑・交通情報（例：レンタカー、バス、自転車）
+　- 穴場・季節限定情報（例：ホタル観賞、サガリバナ開花）
+3. 回答は簡潔・親しみやすく、必要なら箇条書き＋絵文字を使う
+4. 対話を柔軟に進め、ユーザーの質問や希望に応じて調整する
+5. 最後に必ず「他にも知りたいことがあれば教えてね！」と伝える
+
+【最新情報（Google検索結果）】
+以下の情報は直近のネット検索から取得したもので、優先的に提案してください。
 {google_info}
 
-【重要】
-- 検索結果のみを基に回答
-- 事実ベースで簡潔に回答
-- 必要なら箇条書き・絵文字を使用
-- 最後に「他にも知りたいことがあれば教えてね！」と添える
+【NG事項】
+- 難しい敬語や堅苦しい表現
+- 情報の押しつけ（相手が望んでいない提案を続ける）
+- 長文すぎる説明（LINEの特性を意識）
+
+【優先度】
+1. ユーザーの好みを把握
+2. 現地の最新情報を提案
+3. 楽しさ・親しみやすさを演出
 """
 
     try:
@@ -61,7 +71,7 @@ def chatgpt_response(user_message, mode="chatgpt"):
                 {"role": "user", "content": user_message}
             ],
             max_tokens=500,
-            temperature=0.2,  # 創作抑制
+            temperature=0.5,
         )
         reply_text = response.choices[0].message.content.strip()
         return reply_text
@@ -72,10 +82,7 @@ def chatgpt_response(user_message, mode="chatgpt"):
 # LINE Bot 応答関数
 def handle_message(event, line_bot_api):
     user_message = event.message.text
-
-    # mode切り替え例：「直接モード」にしたい場合は"direct"
-    reply_text = chatgpt_response(user_message, mode="chatgpt")
-
+    reply_text = chatgpt_response(user_message)
     try:
         line_bot_api.reply_message(
             ReplyMessageRequest(
