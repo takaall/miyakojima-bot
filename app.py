@@ -6,6 +6,9 @@ from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMe
 from linebot.v3.exceptions import InvalidSignatureError
 import openai
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # ChatGPT 応答関数
 def chatgpt_response(user_message):
     openai.api_key = os.environ.get('OPENAI_API_KEY')
@@ -13,10 +16,10 @@ def chatgpt_response(user_message):
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": user_message}],
-            max_tokens=100,
+            max_tokens=300,
             temperature=0.7,
         )
-        reply_text = response['choices'][0]['message']['content'].strip()
+        reply_text = response['choices'][0]['message']['content'].strip()[:1000]
         return reply_text
     except Exception as e:
         print(f"OpenAI API error: {e}")
@@ -25,8 +28,6 @@ def chatgpt_response(user_message):
 # LINE Bot 応答関数
 def handle_message(event, line_bot_api):
     user_message = event.message.text
-
-    # 特定のキーワードは固定応答、それ以外はChatGPTへ
     if user_message in ["おはよう", "こんにちは", "こんばんは"]:
         reply_text = f"{user_message}、我が主！ ご機嫌麗しゅう。（ファクトリ版）"
     elif user_message == "天気":
@@ -34,7 +35,6 @@ def handle_message(event, line_bot_api):
     elif user_message in ["雑学", "豆知識", "面白い話", "なんか話して"]:
         reply_text = "面白い話（ファクトリ版）。仕入れ中！"
     else:
-        # それ以外のメッセージはChatGPTに送る
         reply_text = chatgpt_response(user_message)
 
     try:
@@ -81,7 +81,7 @@ def create_app():
     def hello_world():
         handler_status = "OK" if 'handler' in locals() and handler is not None else "FAIL"
         config_status = "OK" if 'configuration' in locals() and configuration is not None else "FAIL"
-        return f"Factory Bot Running! Handler: {handler_status}, Config: {config_status}"
+        return f"ファクトリーボット実行中！ハンドラー: {handler_status}、構成: {config_status}"
 
     @app.route("/callback", methods=['POST'])
     def callback():
@@ -102,9 +102,7 @@ def create_app():
     app.logger.info("Routes defined inside factory.")
     return app
 
-# Vercel 用
 app = create_app()
 
-# ローカル実行用
 if __name__ == '__main__':
     app.run(port=5000)
