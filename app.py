@@ -1,4 +1,5 @@
 import os
+import requests
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
@@ -10,12 +11,31 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Google検索から最新情報を取得する関数
+def get_google_search_results(query, max_results=3):
+    api_key = os.environ.get('GOOGLE_API_KEY')
+    cse_id = os.environ.get('CSE_ID')
+    url = f'https://www.googleapis.com/customsearch/v1?q={query}&key={api_key}&cx={cse_id}'
+
+    try:
+        response = requests.get(url)
+        data = response.json()
+        results = []
+        for item in data.get('items', [])[:max_results]:
+            results.append(f"{item['title']}: {item['link']}")
+        return "\n".join(results) if results else "最新情報は見つかりませんでした。"
+    except Exception as e:
+        print(f"Google API error: {e}")
+        return "Google検索中にエラーが発生しました。"
+
 # ChatGPT 応答関数
 def chatgpt_response(user_message):
     api_key = os.environ.get('OPENAI_API_KEY')
     client = OpenAI(api_key=api_key)
 
-    system_prompt = """
+    # Google検索結果を取得してプロンプトに組み込む
+    google_info = get_google_search_results(user_message)
+    system_prompt = f"""
 あなたは宮古島観光のエキスパートかつ旅行者の友人です。明るく親しみやすく、旅行者が安心して楽しめるようにガイドします。
 
 【行動指針】
@@ -30,10 +50,8 @@ def chatgpt_response(user_message):
 4. 対話を柔軟に進め、ユーザーの質問や希望に応じて調整する
 5. 最後に必ず「他にも知りたいことがあれば教えてね！」と伝える
 
-【回答例】
-今日は晴れ☀️だから与那覇前浜ビーチでのんびりがオススメ！
-午後は東平安名崎の絶景を見に行ってね。夜は市街地で宮古そばをどう？🍜
-他にも知りたいことがあれば教えてね！
+【最新情報（Google検索結果）】
+{google_info}
 
 【NG事項】
 - 難しい敬語や堅苦しい表現
