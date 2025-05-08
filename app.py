@@ -1,12 +1,12 @@
 import os
 import requests
-# import mysql.connector ← 一旦コメントアウト
+# import mysql.connector  # ← 一旦コメントアウト
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
 from linebot.v3.exceptions import InvalidSignatureError
-from openai import OpenAI
+import openai  # ← 修正
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -37,7 +37,7 @@ def get_google_search_results(query, max_results=3):
 # ChatGPT応答
 def chatgpt_response(user_message):
     api_key = os.environ.get('OPENAI_API_KEY')
-    client = OpenAI(api_key=api_key)
+    openai.api_key = api_key  # ← 修正
 
     google_info = get_google_search_results(user_message)
     system_prompt = f"""
@@ -71,7 +71,7 @@ def chatgpt_response(user_message):
 """
 
     try:
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(  # ← 修正
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -80,7 +80,7 @@ def chatgpt_response(user_message):
             max_tokens=500,
             temperature=0.5,
         )
-        return response.choices[0].message.content.strip()
+        return response['choices'][0]['message']['content'].strip()  # ← 修正
     except Exception as e:
         print(f"OpenAI API error: {e}")
         return "ChatGPT連携中にエラーが発生しました。"
