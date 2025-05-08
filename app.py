@@ -47,8 +47,12 @@ def get_user_history(user_id, limit=5):
             (user_id, limit)
         )
         rows = cursor.fetchall()
-        # 古い順に並べ替える
-        history = [{"role": row[0], "content": row[1]} for row in reversed(rows)]
+        history = []
+        for row in reversed(rows):
+            role = row[0]
+            if role == 'bot':
+                role = 'assistant'  # OpenAI用に変換
+            history.append({"role": role, "content": row[1]})
         return history
     except Exception as e:
         print(f"DB select error: {e}")
