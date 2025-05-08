@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ✅ DB接続関数（ここはOK）
+# DB接続関数
 def get_db_connection():
     return mysql.connector.connect(
         host=os.environ.get("DB_HOST"),
@@ -21,7 +21,7 @@ def get_db_connection():
         port=int(os.environ.get("DB_PORT", 3306))
     )
 
-# ✅ ユーザーメッセージ保存関数（ここに追加）
+# ユーザーメッセージ保存関数
 def save_user_message(user_id, message, role):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -36,7 +36,7 @@ def save_user_message(user_id, message, role):
     finally:
         cursor.close()
         conn.close()
-        
+
 # ユーザー履歴取得関数（直近5件）
 def get_user_history(user_id, limit=5):
     conn = get_db_connection()
@@ -97,7 +97,8 @@ def chatgpt_response(user_id, user_message):
 以下の情報は直近のネット検索から取得したもので、優先的に提案してください。
 {google_info}
 """
-       # 履歴を取得してメッセージリストに組み込む
+
+    # 履歴を取得してメッセージリストに組み込む
     history = get_user_history(user_id)
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history)
@@ -123,8 +124,8 @@ def handle_message(event, line_bot_api):
     # ユーザー発言を保存
     save_user_message(user_id, user_message, 'user')
 
-    # ChatGPT応答生成
-    reply_text = chatgpt_response(user_message)
+    # ChatGPT応答生成（履歴付き）
+    reply_text = chatgpt_response(user_id, user_message)
 
     # Bot応答を保存
     save_user_message(user_id, reply_text, 'bot')
@@ -140,7 +141,7 @@ def handle_message(event, line_bot_api):
     except Exception as e:
         print(f"Reply Error: {e}")
 
-# Flask app factory
+# Flaskアプリ工場
 def create_app():
     app = Flask(__name__)
 
