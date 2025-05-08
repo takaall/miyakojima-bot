@@ -1,23 +1,41 @@
 import os
 import requests
-# import mysql.connector  # ← 一旦コメントアウト
+import mysql.connector
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
 from linebot.v3.exceptions import InvalidSignatureError
-import openai  # ← 修正
+import openai
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# DB接続（外す）
-# db = mysql.connector.connect(
-#     host=os.getenv("DB_HOST"),
-#     user=os.getenv("DB_USER"),
-#     password=os.getenv("DB_PASSWORD"),
-#     database=os.getenv("DB_NAME")
-# )
+# ✅ DB接続関数（ここはOK）
+def get_db_connection():
+    return mysql.connector.connect(
+        host=os.environ.get("DB_HOST"),
+        user=os.environ.get("DB_USER"),
+        password=os.environ.get("DB_PASSWORD"),
+        database=os.environ.get("DB_NAME"),
+        port=int(os.environ.get("DB_PORT", 3306))
+    )
+
+# ✅ ユーザーメッセージ保存関数（ここに追加）
+def save_user_message(user_id, message, role):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO user_history (user_id, message, role) VALUES (%s, %s, %s)",
+            (user_id, message, role)
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"DB insert error: {e}")
+    finally:
+        cursor.close()
+        conn.close()
 
 # Google検索から最新情報取得
 def get_google_search_results(query, max_results=3):
@@ -59,7 +77,6 @@ def chatgpt_response(user_message):
 以下の情報は直近のネット検索から取得したもので、優先的に提案してください。
 {google_info}
 """
-
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -74,11 +91,21 @@ def chatgpt_response(user_message):
     except Exception as e:
         print(f"OpenAI API error: {e}")
         return "ChatGPT連携中にエラーが発生しました。"
-        
-# LINE Bot応答
+
+# LINE Botメッセージ処理
 def handle_message(event, line_bot_api):
+    user_id = event.source.user_id
     user_message = event.message.text
+
+    # ユーザー発言を保存
+    save_user_message(user_id, user_message, 'user')
+
+    # ChatGPT応答生成
     reply_text = chatgpt_response(user_message)
+
+    # Bot応答を保存
+    save_user_message(user_id, reply_text, 'bot')
+
     try:
         line_bot_api.reply_message(
             ReplyMessageRequest(
@@ -115,7 +142,7 @@ def create_app():
 
     @app.route("/callback", methods=['POST'])
     def callback():
-        signature = request.headers['X-Line-Signature']
+        signature = request.headers.get('X-Line-Signature', '')
         body = request.get_data(as_text=True)
         try:
             handler.handle(body, signature)
