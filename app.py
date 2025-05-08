@@ -37,7 +37,7 @@ def save_user_message(user_id, message, role):
         cursor.close()
         conn.close()
 
-# ユーザー履歴取得関数（直近5件）
+# ✅ ここを追加: ユーザー履歴取得関数（role調整つき）
 def get_user_history(user_id, limit=5):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -51,7 +51,7 @@ def get_user_history(user_id, limit=5):
         for row in reversed(rows):
             role = row[0]
             if role == 'bot':
-                role = 'assistant'  # OpenAI用に変換
+                role = 'assistant'  # ✅ ここを修正: OpenAI用に変換
             history.append({"role": role, "content": row[1]})
         return history
     except Exception as e:
@@ -61,7 +61,7 @@ def get_user_history(user_id, limit=5):
         cursor.close()
         conn.close()
 
-# Google検索から最新情報取得
+# ✅ ここを修正: Google検索からsnippet付きで取得
 def get_google_search_results(query, max_results=3):
     api_key = os.environ.get('GOOGLE_API_KEY')
     cse_id = os.environ.get('CSE_ID')
@@ -70,39 +70,38 @@ def get_google_search_results(query, max_results=3):
     try:
         response = requests.get(url)
         data = response.json()
-        results = [f"{item['title']}: {item['link']}" for item in data.get('items', [])[:max_results]]
+        results = []
+        for item in data.get('items', [])[:max_results]:
+            title = item.get('title', 'タイトル不明')
+            snippet = item.get('snippet', '概要情報は取得できませんでした')  # ✅ snippetを追加
+            link = item.get('link', '')
+            results.append(f"{title}: {snippet} ({link})")
         return "\n".join(results) if results else "最新情報は見つかりませんでした。"
     except Exception as e:
         print(f"Google API error: {e}")
         return "Google検索中にエラーが発生しました。"
 
-# ChatGPT応答生成（履歴付き）
+# ✅ ここを修正: ChatGPT応答生成（履歴＆強化プロンプト付き）
 def chatgpt_response(user_id, user_message):
     api_key = os.environ.get('OPENAI_API_KEY')
     client = openai.OpenAI(api_key=api_key)
 
     google_info = get_google_search_results(user_message)
     system_prompt = f"""
-あなたは宮古島観光のエキスパートかつ旅行者の友人です。明るく親しみやすく、旅行者が安心して楽しめるようにガイドします。
+あなたは宮古島観光のエキスパートかつ旅行者の友人です。
+以下のGoogle検索結果に基づいて、ユーザーの質問に答えてください。
 
-【行動指針】
-1. ユーザーの興味・予算・人数・日程・目的をまず質問して聞き出す
-2. 以下のカテゴリから最適な提案をする：
-　- 観光スポット（例：与那覇前浜ビーチ、砂山ビーチ、東平安名崎）
-　- グルメ（例：宮古そば、海鮮、カフェ、夜のバー）
-　- アクティビティ（例：シュノーケリング、SUP、ドライブコース）
-　- 天気・混雑・交通情報（例：レンタカー、バス、自転車）
-　- 穴場・季節限定情報（例：ホタル観賞、サガリバナ開花）
-3. 回答は簡潔・親しみやすく、必要なら箇条書き＋絵文字を使う
-4. 対話を柔軟に進め、ユーザーの質問や希望に応じて調整する
-5. 最後に必ず「他にも知りたいことがあれば教えてね！」と伝える
+【ルール】
+- 検索結果の情報に基づいて答える
+- 検索結果にない情報は「情報が見つかりませんでした」と伝える
+- 嘘をつかず、わかる範囲でシンプルに説明する
+- 結論を先に、必要なら箇条書きで詳細を補足する
 
-【最新情報（Google検索結果）】
-以下の情報は直近のネット検索から取得したもので、優先的に提案してください。
+【Google検索結果】
 {google_info}
 """
 
-    # 履歴を取得してメッセージリストに組み込む
+    # ✅ 履歴を取得
     history = get_user_history(user_id)
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history)
@@ -125,13 +124,13 @@ def handle_message(event, line_bot_api):
     user_id = event.source.user_id
     user_message = event.message.text
 
-    # ユーザー発言を保存
+    # ✅ ユーザー発言を保存
     save_user_message(user_id, user_message, 'user')
 
-    # ChatGPT応答生成（履歴付き）
+    # ✅ ChatGPT応答生成（履歴付き）
     reply_text = chatgpt_response(user_id, user_message)
 
-    # Bot応答を保存
+    # ✅ Bot応答を保存
     save_user_message(user_id, reply_text, 'bot')
 
     try:
