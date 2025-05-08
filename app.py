@@ -37,7 +37,7 @@ def get_google_search_results(query, max_results=3):
 # ChatGPT応答
 def chatgpt_response(user_message):
     api_key = os.environ.get('OPENAI_API_KEY')
-    openai.api_key = api_key  # ← 修正
+    client = openai.OpenAI(api_key=api_key)
 
     google_info = get_google_search_results(user_message)
     system_prompt = f"""
@@ -58,20 +58,10 @@ def chatgpt_response(user_message):
 【最新情報（Google検索結果）】
 以下の情報は直近のネット検索から取得したもので、優先的に提案してください。
 {google_info}
-
-【NG事項】
-- 難しい敬語や堅苦しい表現
-- 情報の押しつけ（相手が望んでいない提案を続ける）
-- 長文すぎる説明（LINEの特性を意識）
-
-【優先度】
-1. ユーザーの好みを把握
-2. 現地の最新情報を提案
-3. 楽しさ・親しみやすさを演出
 """
 
     try:
-        response = openai.ChatCompletion.create(  # ← 修正
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -80,11 +70,11 @@ def chatgpt_response(user_message):
             max_tokens=500,
             temperature=0.5,
         )
-        return response['choices'][0]['message']['content'].strip()  # ← 修正
+        return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"OpenAI API error: {e}")
         return "ChatGPT連携中にエラーが発生しました。"
-
+        
 # LINE Bot応答
 def handle_message(event, line_bot_api):
     user_message = event.message.text
