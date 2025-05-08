@@ -1,6 +1,6 @@
 import os
 import requests
-import mysql.connector
+# import mysql.connector ← 一旦コメントアウト
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
@@ -11,13 +11,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# DB接続
-db = mysql.connector.connect(
-    host=os.getenv("DB_HOST"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-    database=os.getenv("DB_NAME")
-)
+# DB接続（外す）
+# db = mysql.connector.connect(
+#     host=os.getenv("DB_HOST"),
+#     user=os.getenv("DB_USER"),
+#     password=os.getenv("DB_PASSWORD"),
+#     database=os.getenv("DB_NAME")
+# )
 
 # Google検索から最新情報取得
 def get_google_search_results(query, max_results=3):
