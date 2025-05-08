@@ -36,6 +36,26 @@ def save_user_message(user_id, message, role):
     finally:
         cursor.close()
         conn.close()
+        
+# ユーザー履歴取得関数（直近5件）
+def get_user_history(user_id, limit=5):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT role, message FROM user_history WHERE user_id = %s ORDER BY created_at DESC LIMIT %s",
+            (user_id, limit)
+        )
+        rows = cursor.fetchall()
+        # 古い順に並べ替える
+        history = [{"role": row[0], "content": row[1]} for row in reversed(rows)]
+        return history
+    except Exception as e:
+        print(f"DB select error: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
 
 # Google検索から最新情報取得
 def get_google_search_results(query, max_results=3):
@@ -52,8 +72,8 @@ def get_google_search_results(query, max_results=3):
         print(f"Google API error: {e}")
         return "Google検索中にエラーが発生しました。"
 
-# ChatGPT応答
-def chatgpt_response(user_message):
+# ChatGPT応答生成（履歴付き）
+def chatgpt_response(user_id, user_message):
     api_key = os.environ.get('OPENAI_API_KEY')
     client = openai.OpenAI(api_key=api_key)
 
@@ -77,13 +97,16 @@ def chatgpt_response(user_message):
 以下の情報は直近のネット検索から取得したもので、優先的に提案してください。
 {google_info}
 """
+       # 履歴を取得してメッセージリストに組み込む
+    history = get_user_history(user_id)
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(history)
+    messages.append({"role": "user", "content": user_message})
+
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ],
+            messages=messages,
             max_tokens=500,
             temperature=0.5,
         )
