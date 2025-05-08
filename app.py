@@ -121,6 +121,7 @@ def chatgpt_response(user_id, user_message):
             model="gpt-3.5-turbo",
             messages=messages,
             max_tokens=300,
+            top_p=0.3,
             temperature=0.3,
         )
         return response.choices[0].message.content.strip()
