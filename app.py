@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# DB接続関数
 def get_db_connection():
     return mysql.connector.connect(
         host=os.environ.get("DB_HOST"),
@@ -20,6 +21,7 @@ def get_db_connection():
         port=int(os.environ.get("DB_PORT", 3306))
     )
 
+# ユーザーメッセージ保存関数
 def save_user_message(user_id, message, role):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -35,7 +37,7 @@ def save_user_message(user_id, message, role):
         cursor.close()
         conn.close()
 
-# ✅ 履歴取得: role変換・空メッセージ除去
+# ユーザー履歴取得関数（直近5件）
 def get_user_history(user_id, limit=5):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -49,15 +51,8 @@ def get_user_history(user_id, limit=5):
         for row in reversed(rows):
             role = row[0]
             if role == 'bot':
-                role = 'assistant'
-            elif role == 'user':
-                role = 'user'
-            else:
-                continue
-            content = row[1]
-            if not content.strip():
-                continue
-            history.append({"role": role, "content": content})
+                role = 'assistant'  # OpenAI用に変換
+            history.append({"role": role, "content": row[1]})
         return history
     except Exception as e:
         print(f"DB select error: {e}")
@@ -66,7 +61,7 @@ def get_user_history(user_id, limit=5):
         cursor.close()
         conn.close()
 
-# ✅ Google API部分 → 一時停止中（問題切り分け用）
+# Google検索から最新情報取得
 def get_google_search_results(query, max_results=3):
     api_key = os.environ.get('GOOGLE_API_KEY')
     cse_id = os.environ.get('CSE_ID')
@@ -75,66 +70,112 @@ def get_google_search_results(query, max_results=3):
     try:
         response = requests.get(url)
         data = response.json()
-        results = []
-        for item in data.get('items', [])[:max_results]:
-            title = item.get('title', 'タイトル不明')
-            snippet = item.get('snippet', '概要情報は取得できませんでした')
-            link = item.get('link', '')
-            results.append(f"{title}: {snippet} ({link})")
+        results = [f"{item['title']}: {item['link']}" for item in data.get('items', [])[:max_results]]
         return "\n".join(results) if results else "最新情報は見つかりませんでした。"
     except Exception as e:
         print(f"Google API error: {e}")
         return "Google検索中にエラーが発生しました。"
 
-# ✅ ChatGPT応答生成（履歴・ログ付き）
+# ChatGPT応答生成（履歴付き）
 def chatgpt_response(user_id, user_message):
     api_key = os.environ.get('OPENAI_API_KEY')
     client = openai.OpenAI(api_key=api_key)
 
     google_info = get_google_search_results(user_message)
     system_prompt = f"""
-あなたは宮古島観光のエキスパートかつ旅行者の友人です。
-以下のGoogle検索結果に基づいて、ユーザーの質問に答えてください。
 
-【ルール】
-- 検索結果の情報に基づいて答える
-- 検索結果にない情報は「情報が見つかりませんでした」と伝える
-- 嘘をつかず、わかる範囲でシンプルに説明する
-- 結論を先に、必要なら箇条書きで詳細を補足する
+あなたは沖縄県・宮古島に関する地域情報を提供するLINEボットです。
 
-【Google検索結果】
+---
+
+## 役割 (Role) / ペルソナ (Persona)
+
+あなたは宮古島に詳しい、ユーモラスで親しみやすい雑談相手です。観光客に対してフレンドリーで楽しい会話を心がけ、専門家らしさではなく親しみを感じさせる話し方をします。
+
+---
+
+## 指示 (Instructions) / タスク定義 (Task Definition)
+
+1. ユーザーからの質問を受け取ったら、Google Search API を使って関連情報を検索してください。
+2. 得られた検索結果を読み取り、要点をわかりやすく、簡潔かつフレンドリーな言葉でまとめて返答してください。
+3. 検索結果をそのまま引用するのではなく、噛み砕いて説明してください。
+4. 検索結果が少ない場合や情報が不足している場合は、「わかりません」と言わず、関連情報・一般情報・旅行者向けの豆知識を補足して提供してください。
+5. 特定の店舗やサービスを不公平に推奨したり、地域差別・偏見を含む表現は避け、公平で中立的な表現を心がけてください。
+
+---
+
+## 制約条件 (Constraints)
+
+* ユーザーに親しみやすく、ユーモアを交えたカジュアルなトーンを使う。
+* 事実誤認（ハルシネーション）を減らすため、検索結果の内容から外れない。
+* 特定の店舗・サービスを強く推しすぎない。
+* 地域差別・偏見を一切含めない。
+
+---
+
+## 文脈 (Context)
+
+対象ユーザーは宮古島を訪れる国内外の観光客。彼らは観光スポット、グルメ、宿泊、アクティビティ、文化体験など幅広い情報を求めています。旅行前の準備から滞在中の疑問まで柔軟に対応できることが求められます。
+
+---
+
+## 出力形式 (Output Format)
+
+* 冒頭に親しみやすい一言を添える。
+* 箇条書きでわかりやすく情報を整理する。
+* 必要に応じて予約や注意点を簡単に補足する。
+* 情報不足時は「詳しい情報は少ないけど～だよ」と補足する。
+
+---
+
+## フューショット例 (Few-shot Example)
+
+<example>
+ユーザー質問: 「宮古島のおすすめ居酒屋は？」
+
+ボット回答: 「宮古島で人気の居酒屋はこんな感じだよ！
+
+* 居酒屋〇〇（魚料理が評判）
+* 居酒屋△△（泡盛が楽しめる）
+
+どこも観光客に人気だから、行く前に予約しておくと安心だよ！」 </example>
+
+
+【最新情報（Google検索結果）】
+以下の情報は直近のネット検索から取得したもので、優先的に提案してください。
 {google_info}
 """
 
+    # 履歴を取得してメッセージリストに組み込む
     history = get_user_history(user_id)
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history)
     messages.append({"role": "user", "content": user_message})
 
-    # ✅ OpenAIに送るデータをログ出力
-    print("=== Sending messages to OpenAI ===")
-    for msg in messages:
-        print(msg)
-
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=messages,
-            max_tokens=300,
-            top_p=0.3,
-            temperature=0.3,
+            max_tokens=500,
+            temperature=0.5,
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"OpenAI API error: {e}")
         return "ChatGPT連携中にエラーが発生しました。"
 
+# LINE Botメッセージ処理
 def handle_message(event, line_bot_api):
     user_id = event.source.user_id
     user_message = event.message.text
 
+    # ユーザー発言を保存
     save_user_message(user_id, user_message, 'user')
+
+    # ChatGPT応答生成（履歴付き）
     reply_text = chatgpt_response(user_id, user_message)
+
+    # Bot応答を保存
     save_user_message(user_id, reply_text, 'bot')
 
     try:
@@ -148,6 +189,7 @@ def handle_message(event, line_bot_api):
     except Exception as e:
         print(f"Reply Error: {e}")
 
+# Flaskアプリ工場
 def create_app():
     app = Flask(__name__)
 
