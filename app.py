@@ -1,5 +1,6 @@
 import os
 import requests
+import mysql.connector
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
@@ -10,7 +11,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Google検索から最新情報を取得する関数
+# DB接続
+db = mysql.connector.connect(
+    host=os.getenv("DB_HOST"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWORD"),
+    database=os.getenv("DB_NAME")
+)
+
+# Google検索から最新情報取得
 def get_google_search_results(query, max_results=3):
     api_key = os.environ.get('GOOGLE_API_KEY')
     cse_id = os.environ.get('CSE_ID')
@@ -19,15 +28,13 @@ def get_google_search_results(query, max_results=3):
     try:
         response = requests.get(url)
         data = response.json()
-        results = []
-        for item in data.get('items', [])[:max_results]:
-            results.append(f"{item['title']}: {item['link']}")
+        results = [f"{item['title']}: {item['link']}" for item in data.get('items', [])[:max_results]]
         return "\n".join(results) if results else "最新情報は見つかりませんでした。"
     except Exception as e:
         print(f"Google API error: {e}")
         return "Google検索中にエラーが発生しました。"
 
-# ChatGPT 応答関数
+# ChatGPT応答
 def chatgpt_response(user_message):
     api_key = os.environ.get('OPENAI_API_KEY')
     client = OpenAI(api_key=api_key)
@@ -73,13 +80,12 @@ def chatgpt_response(user_message):
             max_tokens=500,
             temperature=0.5,
         )
-        reply_text = response.choices[0].message.content.strip()
-        return reply_text
+        return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"OpenAI API error: {e}")
         return "ChatGPT連携中にエラーが発生しました。"
 
-# LINE Bot 応答関数
+# LINE Bot応答
 def handle_message(event, line_bot_api):
     user_message = event.message.text
     reply_text = chatgpt_response(user_message)
@@ -90,67 +96,49 @@ def handle_message(event, line_bot_api):
                 messages=[TextMessage(text=reply_text)]
             )
         )
-        print(f"Replied (factory): {user_message}")
+        print(f"Replied to: {user_message}")
     except Exception as e:
-        print(f"Reply Error (factory): {e}")
+        print(f"Reply Error: {e}")
 
-# アプリケーションファクトリ関数
+# Flask app factory
 def create_app():
     app = Flask(__name__)
-    app.logger.info("Flask app created inside factory.")
 
     line_channel_access_token = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
     line_channel_secret = os.environ.get('LINE_CHANNEL_SECRET')
 
     if not line_channel_access_token or not line_channel_secret:
-        app.logger.critical("CRITICAL ERROR: Missing environment variables in factory.")
         raise RuntimeError("Missing LINE environment variables")
 
-    try:
-        configuration = Configuration(access_token=line_channel_access_token)
-        handler = WebhookHandler(line_channel_secret)
-        app.logger.info("LINE SDK initialized inside factory.")
+    configuration = Configuration(access_token=line_channel_access_token)
+    handler = WebhookHandler(line_channel_secret)
 
-        @handler.add(MessageEvent, message=TextMessageContent)
-        def handle_message_wrapper(event):
-            with ApiClient(configuration) as api_client:
-                line_bot_api = MessagingApi(api_client)
-                handle_message(event, line_bot_api)
-
-        app.logger.info("Message handler registered inside factory.")
-
-    except Exception as e:
-        app.logger.critical(f"CRITICAL ERROR: Failed to initialize LINE SDK in factory: {e}")
-        raise RuntimeError(f"Failed to initialize LINE SDK: {e}")
+    @handler.add(MessageEvent, message=TextMessageContent)
+    def handle_message_wrapper(event):
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            handle_message(event, line_bot_api)
 
     @app.route("/")
-    def hello_world():
-        handler_status = "OK" if 'handler' in locals() and handler is not None else "FAIL"
-        config_status = "OK" if 'configuration' in locals() and configuration is not None else "FAIL"
-        return f"ファクトリーボット実行中！ハンドラー: {handler_status}、構成: {config_status}"
+    def index():
+        return "Bot is running!"
 
     @app.route("/callback", methods=['POST'])
     def callback():
         signature = request.headers['X-Line-Signature']
         body = request.get_data(as_text=True)
-        app.logger.info("Request body: " + body)
         try:
             handler.handle(body, signature)
         except InvalidSignatureError:
-            print("Invalid signature.")
             abort(400)
         except Exception as e:
-            print(f"Webhook handling error: {e}")
-            app.logger.error(f"Webhook handling error: {e}")
+            print(f"Webhook error: {e}")
             abort(500)
         return 'OK'
 
-    app.logger.info("Routes defined inside factory.")
     return app
 
-# Vercel 用
 app = create_app()
 
-# ローカル実行用
 if __name__ == '__main__':
     app.run(port=5000)
