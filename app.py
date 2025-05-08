@@ -68,7 +68,23 @@ def get_user_history(user_id, limit=5):
 
 # ✅ Google API部分 → 一時停止中（問題切り分け用）
 def get_google_search_results(query, max_results=3):
-    return "現在、Google検索結果は取得していません。"
+    api_key = os.environ.get('GOOGLE_API_KEY')
+    cse_id = os.environ.get('CSE_ID')
+    search_query = f"宮古島 {query}"
+    url = f'https://www.googleapis.com/customsearch/v1?q={search_query}&key={api_key}&cx={cse_id}'
+    try:
+        response = requests.get(url)
+        data = response.json()
+        results = []
+        for item in data.get('items', [])[:max_results]:
+            title = item.get('title', 'タイトル不明')
+            snippet = item.get('snippet', '概要情報は取得できませんでした')
+            link = item.get('link', '')
+            results.append(f"{title}: {snippet} ({link})")
+        return "\n".join(results) if results else "最新情報は見つかりませんでした。"
+    except Exception as e:
+        print(f"Google API error: {e}")
+        return "Google検索中にエラーが発生しました。"
 
 # ✅ ChatGPT応答生成（履歴・ログ付き）
 def chatgpt_response(user_id, user_message):
